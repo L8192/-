@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CUP咖啡 · AI知识库问答</title>
+<style>
+  :root {
+    --brown: #6B3A2A;
+    --brown-light: #8B5E3C;
+    --cream: #FFF8F0;
+    --cream-dark: #F5E6D3;
+    --gold: #C8963E;
+    --text: #2C1810;
+    --text-light: #5C4030;
+    --white: #FFFFFF;
+    --shadow: 0 2px 12px rgba(107,58,42,0.10);
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 720px;
+    height: 100vh;
+    max-height: 900px;
+    display: flex;
+    flex-direction: column;
+    background: var(--white);
+    box-shadow: var(--shadow);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  @media (max-width: 768px) {
+    .app { max-width:100%; height:100vh; max-height:none; border-radius:0; }
+  }
+
+  /* ── 标题栏 ── */
+  .header {
+    background: linear-gradient(135deg, var(--brown), var(--brown-light));
+    color: var(--white);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .header .logo { font-size:28px; }
+  .header h1 { font-size:18px; font-weight:600; }
+  .header .sub { font-size:12px; opacity:0.8; margin-top:2px; }
+
+  /* ── 对话区 ── */
+  .chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: #FAFAFA;
+  }
+
+  .chat-area::-webkit-scrollbar { width:5px; }
+  .chat-area::-webkit-scrollbar-thumb { background:#DDD; border-radius:3px; }
+
+  /* ── 消息气泡 ── */
+  .msg { display:flex; gap:10px; max-width:85%; animation: fadeIn .3s ease; }
+  .msg.user { align-self:flex-end; flex-direction:row-reverse; }
+  .msg.assistant { align-self:flex-start; }
+
+  .bubble {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    line-height: 1.7;
+    word-break: break-word;
+  }
+  .msg.user .bubble {
+    background: var(--brown);
+    color: var(--white);
+    border-bottom-right-radius: 4px;
+  }
+  .msg.assistant .bubble {
+    background: var(--white);
+    color: var(--text);
+    border: 1px solid #E8DDD2;
+    border-bottom-left-radius: 4px;
+  }
+  /* Markdown 渲染样式 */
+  .msg.assistant .bubble p { margin: 0 0 6px; }
+  .msg.assistant .bubble p:last-child { margin-bottom: 0; }
+  .msg.assistant .bubble strong { color: var(--brown); }
+  .msg.assistant .bubble ul, .msg.assistant .bubble ol { margin: 4px 0; padding-left: 18px; }
+  .msg.assistant .bubble li { margin-bottom: 2px; }
+  .msg.assistant .bubble code {
+    background: #F5E6D3; padding: 1px 5px; border-radius: 3px;
+    font-family: Consolas, monospace; font-size: 13px;
+  }
+  .msg.assistant .bubble table { border-collapse: collapse; margin: 6px 0; font-size: 12px; }
+  .msg.assistant .bubble th, .msg.assistant .bubble td {
+    border: 1px solid #E0D5C5; padding: 4px 8px; text-align: left;
+  }
+  .msg.assistant .bubble th { background: #F5E6D3; font-weight: 600; }
+  .msg.assistant .bubble h3 { font-size: 14px; color: var(--brown); margin: 8px 0 4px; }
+  .msg.assistant .bubble h4 { font-size: 13px; color: var(--brown); margin: 6px 0 3px; }
+  .msg.assistant .bubble blockquote {
+    border-left: 3px solid var(--gold); margin: 6px 0; padding: 2px 10px;
+    color: var(--text-light); font-style: italic;
+  }
+
+  .avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .msg.user .avatar { background: var(--brown-light); }
+  .msg.assistant .avatar { background: var(--cream-dark); }
+
+  /* ── 来源引用 ── */
+  .sources {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .source-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    background: var(--cream-dark);
+    color: var(--text-light);
+    border-radius: 12px;
+    cursor: default;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .source-tag:hover {
+    background: var(--gold);
+    color: var(--white);
+  }
+
+  /* ── Token 消耗 ── */
+  .token-info {
+    margin-top: 6px;
+    font-size: 10px;
+    color: #BBA89A;
+  }
+
+  /* ── 加载动画 ── */
+  .typing { display:flex; gap:4px; padding:6px 0; }
+  .typing span {
+    width:7px; height:7px;
+    background: var(--brown-light);
+    border-radius:50%;
+    animation: bounce 1.4s infinite ease-in-out both;
+  }
+  .typing span:nth-child(1) { animation-delay: -.32s; }
+  .typing span:nth-child(2) { animation-delay: -.16s; }
+  @keyframes bounce {
+    0%,80%,100% { transform:scale(0); }
+    40% { transform:scale(1); }
+  }
+  @keyframes fadeIn {
+    from { opacity:0; transform:translateY(8px); }
+    to { opacity:1; transform:translateY(0); }
+  }
+
+  /* ── 欢迎提示 ── */
+  .welcome {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-light);
+  }
+  .welcome .icon { font-size: 48px; margin-bottom: 12px; }
+  .welcome h2 { font-size: 18px; margin-bottom: 8px; color: var(--brown); }
+  .welcome p { font-size: 13px; line-height: 1.8; }
+  .welcome .hints { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:16px; }
+  .welcome .hint {
+    font-size:12px; padding:6px 14px;
+    background:var(--cream-dark); border-radius:16px;
+    cursor:pointer; transition: background .2s;
+  }
+  .welcome .hint:hover { background:var(--brown); color:var(--white); }
+
+  /* ── 快捷提问栏 ── */
+  .quick-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--white);
+    border-top: 1px solid #F0E8DC;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .quick-bar .hint {
+    font-size: 12px;
+    padding: 6px 14px;
+    background: var(--cream-dark);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: background .2s, color .2s;
+    color: var(--text-light);
+    border: none;
+    white-space: nowrap;
+  }
+  .quick-bar .hint:hover { background: var(--brown); color: var(--white); }
+
+  /* ── 输入区 ── */
+  .input-area {
+    padding: 14px 20px;
+    border-top: 1px solid #F0E8DC;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: var(--white);
+    flex-shrink: 0;
+  }
+  .input-area textarea {
+    flex:1;
+    border: 1.5px solid #E0D5C5;
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    max-height: 100px;
+    line-height: 1.5;
+    transition: border-color .2s;
+    background: #FAFAFA;
+  }
+  .input-area textarea:focus { border-color: var(--brown); background: var(--white); }
+  .input-area button {
+    width: 44px; height: 44px;
+    border: none; border-radius: 50%;
+    background: var(--brown);
+    color: var(--white);
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background .2s, transform .1s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .input-area button:hover { background: var(--brown-light); }
+  .input-area button:active { transform: scale(0.95); }
+  .input-area button:disabled { background: #CCC; cursor: not-allowed; }
+
+  .disclaimer {
+    text-align: center;
+    font-size: 11px;
+    color: #BBB;
+    padding: 0 20px 12px;
+    background: var(--white);
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- 标题栏 -->
+  <div class="header">
+    <div class="logo">☕</div>
+    <div>
+      <h1>CUP咖啡 · AI助手</h1>
+      <div class="sub">基于门店知识库的智能问答</div>
+    </div>
+  </div>
+
+  <!-- 对话区 -->
+  <div class="chat-area" id="chatArea">
+    <div class="welcome" id="welcome">
+      <div class="icon">🫘</div>
+      <h2>你好！我是小C ☕</h2>
+      <p>CUP咖啡大学城旗舰店的AI助手<br>关于饮品、促销、服务、设施等问题都可以问我</p>
+    </div>
+  </div>
+
+  <!-- 快捷提问栏（始终可见） -->
+  <div class="quick-bar" id="quickBar">
+    <span class="hint" onclick="askHint(this)">WiFi密码是什么？</span>
+    <span class="hint" onclick="askHint(this)">美式咖啡多少钱？</span>
+    <span class="hint" onclick="askHint(this)">有什么促销活动？</span>
+    <span class="hint" onclick="askHint(this)">咖啡太苦怎么办？</span>
+    <span class="hint" onclick="askHint(this)">桂花拿铁怎么卖？</span>
+    <span class="hint" onclick="askHint(this)">可以带宠物吗？</span>
+  </div>
+
+  <!-- 输入区 -->
+  <div class="input-area">
+    <textarea id="inputBox" rows="1" placeholder="输入你的问题…" onkeydown="onKeyDown(event)"></textarea>
+    <button id="sendBtn" onclick="send()" title="发送">▶</button>
+  </div>
+  <div class="disclaimer">小C基于门店知识库回答，仅供参考。如有疑问请联系店员。</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+  // 配置 marked
+  marked.setOptions({ breaks: true, gfm: true });
+
+  const chatArea = document.getElementById('chatArea');
+  const inputBox = document.getElementById('inputBox');
+  const sendBtn = document.getElementById('sendBtn');
+  const welcome = document.getElementById('welcome');
+  let isWaiting = false;
+
+  function onKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  }
+
+  function askHint(el) {
+    inputBox.value = el.textContent;
+    send();
+  }
+
+  async function send() {
+    const question = inputBox.value.trim();
+    if (!question || isWaiting) return;
+
+    if (welcome) {
+      welcome.innerHTML = '<p style="text-align:center;color:var(--text-light);font-size:13px;padding:12px">☕ 随时问我任何关于CUP咖啡的问题</p>';
+    }
+
+    // 用户气泡
+    addMessage('user', question);
+    inputBox.value = '';
+    inputBox.style.height = 'auto';
+
+    // 加载动画
+    const loadingMsg = addMessage('assistant', '', true);
+    isWaiting = true;
+    sendBtn.disabled = true;
+
+    try {
+      const resp = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question })
+      });
+      const data = await resp.json();
+      loadingMsg.remove();
+
+      if (data.error) {
+        addMessage('assistant', '抱歉，出了点问题：' + data.error);
+      } else {
+        addMessage('assistant', data.answer, false, data.sources || [], data.tokens);
+      }
+    } catch (err) {
+      loadingMsg.remove();
+      addMessage('assistant', '网络请求失败，请确认服务已启动。');
+    } finally {
+      isWaiting = false;
+      sendBtn.disabled = false;
+      inputBox.focus();
+    }
+  }
+
+  function addMessage(role, text, isLoading, sources, tokens) {
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = role === 'user' ? '👤' : '☕';
+
+    const bubbleWrap = document.createElement('div');
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    if (isLoading) {
+      bubble.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+    } else if (role === 'assistant') {
+      bubble.innerHTML = marked.parse(text);
+    } else {
+      bubble.textContent = text;
+    }
+
+    bubbleWrap.appendChild(bubble);
+
+    // 来源标签
+    if (sources && sources.length > 0) {
+      const srcDiv = document.createElement('div');
+      srcDiv.className = 'sources';
+      sources.forEach(s => {
+        const tag = document.createElement('span');
+        tag.className = 'source-tag';
+        tag.textContent = `\u{1F4CE} ${s.title}`;
+        tag.title = `分类: ${s.category}`;
+        srcDiv.appendChild(tag);
+      });
+      bubbleWrap.appendChild(srcDiv);
+    }
+
+    // Token 消耗
+    if (tokens && tokens.total > 0) {
+      const tokDiv = document.createElement('div');
+      tokDiv.className = 'token-info';
+      tokDiv.textContent = `\u{1F522} 消耗 ${tokens.total} tokens（输入 ${tokens.prompt} + 输出 ${tokens.completion}）`;
+      bubbleWrap.appendChild(tokDiv);
+    }
+
+    div.appendChild(avatar);
+    div.appendChild(bubbleWrap);
+    chatArea.appendChild(div);
+    chatArea.scrollTop = chatArea.scrollHeight;
+
+    // 自动调整输入框高度
+    inputBox.style.height = 'auto';
+    inputBox.style.height = Math.min(inputBox.scrollHeight, 100) + 'px';
+
+    return div;
+  }
+</script>
+</body>
+</html>
